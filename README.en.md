@@ -1,17 +1,16 @@
 # Aiguillage
 
-A train rhythm game through the countryside. At every switch, one track carries a wagon and the other ends at a buffer stop: switch to the right side just as the engine gets there. Every wagon you take makes the train longer. Play the 1200 tracks from the Rythme plugin, or your own music.
+A steam train rhythm game, through fields, forests, villages and rivers. At every switch, one track carries a wagon and the other ends at a buffer stop: switch to the right side just as the engine gets there. Every wagon you take (logs, crates, coal, tank, passengers, fruit) makes the train longer. Play the 1200 tracks from the Rythme plugin, or your own music.
 
 *Version française : [README.md](README.md)*
 
 ## How to play
 
 - **← or D/F**: left · **→ or J/K**: right. A **click** works too: on the left or right half of the screen.
-- The **arrow** in front of the switch shows the wagon's side; the other track ends at a **red buffer stop**.
-- The wrong side leads to a **dead end**: the note is missed and the train loses a wagon. Every wagon taken adds one (up to 12).
-- The side follows the music: low notes to the left, high notes to the right, never more than 5 times in a row on the same side.
-- **Gamepad**: the D-pad, X, A and the left shoulder go left; B, Y and the right shoulder go right; Start starts, Select pauses.
-- **Space**: play · **P**: pause · **Full screen** during the game.
+- The **arrow** in front of the switch shows the wagon's side; the other track ends at a **red buffer stop**. The wrong side leads to a **dead end**.
+- A **golden siding**: hold the key until it rejoins the line, or the combo breaks.
+- A **crossing** (yellow sign): both sides almost together.
+- **Gamepad**: the d-pad and left buttons for left, the right buttons for right.
 
 ## Accuracy and points
 

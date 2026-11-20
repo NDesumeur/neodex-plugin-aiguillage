@@ -1070,113 +1070,185 @@ function rhOpen() {
   const last = games.rhythmLast || {song: 0, diff: 'normal'}; rhSelect(last.song, last.diff).catch(() => rhSelect(0, 'normal'));
 }
 
-/* ---------- Aiguillage : un train file sur la musique à travers la campagne. À chaque aiguillage, la voie de gauche ou de droite porte un wagon
-   à prendre, l'autre finit en impasse : change l'aiguillage du bon côté (gauche ou droite) pile quand la locomotive y arrive. Chaque wagon pris
-   allonge le train ; une impasse le raccourcit. ---------- */
+/* ---------- Aiguillage : un train à vapeur file sur la musique à travers champs, forêts, villages et rivières. À chaque aiguillage, la voie de
+   gauche ou de droite porte un wagon à prendre, l'autre finit en impasse : change l'aiguillage du bon côté pile quand la locomotive y arrive.
+   Une longue voie de garage dorée : garde la touche jusqu'à ce qu'elle rejoigne la ligne. Un croisement (panneau jaune) : les deux côtés
+   ensemble. Chaque wagon pris allonge le train ; une impasse le raccourcit. ---------- */
 const AG = {X: 160, Y: 186, V: 95, SIDE: 30, MIN: .25};  // X, Y : la locomotive à l'écran ; V : la vitesse (pixels par seconde) ; SIDE : l'écart d'une voie ; MIN : écart minimum, en temps
 const AG_LEFT = ['d', 'f', 's', 'q', 'a', 'ArrowLeft'], AG_RIGHT = ['j', 'k', 'l', 'm', 'ArrowRight'];
-const AG_CARGO = ['#ff6a5a', '#ffd84a', '#7ee07a', '#6ac8ff', '#e08aff', '#ffa040'];
+const agSideOf = k => AG_LEFT.includes(k) ? -1 : AG_RIGHT.includes(k) ? 1 : 0;
+// les wagons : [nom, couleur de caisse, dessin du chargement]
+const AG_CARGO = ['rondins', 'caisses', 'charbon', 'citerne', 'voyageurs', 'fruits'];
 const RHG = {key: 'aiguillage', factor: 1.05, color: '#ffd84a',
-  help: [['← ou D/F : à gauche · → ou J/K : à droite', '#fff4c8'], ['Prends la voie du wagon, pas celle de l\'impasse', '#e8e0ff'], ['Change l\'aiguillage quand la locomotive y arrive', '#e8e0ff']],
+  help: [['← ou D/F : à gauche · → ou J/K : à droite', '#fff4c8'], ['Prends la voie du wagon, pas celle de l\'impasse', '#e8e0ff'], ['Voie dorée : tiens la touche · croisement : les deux côtés', '#e8e0ff']],
   // les notes ensemble n'en font qu'une, trop rapprochées : retirées ; le côté vient de la piste de la note (graves à gauche, aigus à droite),
-  // jamais plus de 5 fois de suite le même côté
+  // jamais plus de 5 fois de suite le même côté. Une note longue : une voie de garage à tenir ; un accent isolé : un croisement (les deux côtés)
   chart(base, c) {
     const beat = (c.step || .125) * 4, out = []; let run = 0;
     for (const n of base) {
-      if (out.length && n.t - out.at(-1).t < AG.MIN * beat - 1e-6) continue;
-      let side = (n.lane ?? 0) < 2 ? -1 : 1; const p = out.at(-1);
-      run = p && p.side === side ? run + 1 : 1; if (run > 5) { side = -side; run = 1; }
-      out.push({t: n.t, side, cargo: out.length % AG_CARGO.length});
+      const p = out.at(-1); if (p && n.t - p.t < AG.MIN * beat - 1e-6) continue;
+      let side = (n.lane ?? 0) < 2 ? -1 : 1; run = p && p.side === side ? run + 1 : 1; if (run > 5) { side = -side; run = 1; }
+      out.push({t: n.t, side, cargo: out.length % AG_CARGO.length, len: (n.len || 0) >= beat * .75 ? n.len : 0, acc: n.acc || 0});
     }
-    out.forEach((n, i) => { n.d = Math.min(.32, ((out[i + 1]?.t ?? n.t + 1) - n.t) / 2.2); });  // la durée d'un écart (aller, puis retour)
+    out.forEach((n, i) => {
+      const gap = (out[i + 1]?.t ?? n.t + 2) - n.t, prev = i ? n.t - out[i - 1].t : 9;
+      n.d = Math.min(.32, gap / 2.2);  // la durée d'un écart (aller, puis retour)
+      if (n.len) { n.len = Math.max(0, Math.min(n.len, gap - 2 * n.d - beat * .25)); if (n.len < beat * .5) n.len = 0; }
+      n.both = !n.len && n.acc > .85 && prev >= beat * .75 && gap >= beat * .75 && i % 2 === 0;
+      if (n.both) n.side = 0;
+      delete n.acc;
+    });
     return out;
   },
-  reset() { Object.assign(rh, {judge: null, tap: -99, shake: 0, wagons: 1, puffs: []}); },
-  update() {
-    const now = rhNow();
-    for (const n of rh.notes) { if (n.judged) continue; if (n.t - now > .2) break; if (now - n.t > RH.WIN.at(-1)[0]) { rhMissed(n); agFx(n, null); } }
-    for (const s of rh.sparks) { s.x += s.vx; s.y += s.vy; s.vx *= .92; s.vy *= .92; s.life--; } rh.sparks = rh.sparks.filter(s => s.life > 0);
-    if (rh.tick % 7 === 0 && rh.mode === 'play') rh.puffs.push({x: agX(now), y: 0, life: 40});
-    for (const p of rh.puffs) { p.y += .6; p.life--; } rh.puffs = rh.puffs.filter(p => p.life > 0);
-    if (rh.shake) rh.shake--;
-    if (rh.judge && --rh.judge.t <= 0) rh.judge = null;
-    rhCheckEnd(now);
-  },
+  reset() { Object.assign(rh, {judge: null, tap: -99, tapSide: 0, shake: 0, wagons: 1, puffs: [], held: null, keysDown: new Set(), cargos: [0]}); },
+  update() { agStep(rhNow()); },
   draw() { agDraw(); },
 };
-// où est la locomotive (décalage de côté) au temps t : sur la voie du wagon pendant un aiguillage bien pris, sinon sur la voie du milieu
+function agStep(now) {
+  for (const n of rh.notes) {
+    if (n.judged) continue; if (n.t - now > .2) break;
+    if (n.first) { if (now - n.first.at > .12) { rhMissed(n); agFx(n, null, 'CROISEMENT'); } continue; }
+    if (now - n.t > RH.WIN.at(-1)[0]) { rhMissed(n); agFx(n, null); }
+  }
+  const h = rh.held;  // la voie de garage : la touche tenue jusqu'à ce qu'elle rejoigne la ligne
+  if (h) { if (now >= h.t + h.d + h.len) { rh.held = null; h.tail = true; rh.score += 150; rh.judge = {text: 'TENU', col: '#ffd84a', t: 20}; }
+    else if (![...rh.keysDown].some(k => agSideOf(k) === h.side)) { rh.held = null; h.broken = true; rh.combo = 0; rh.wagons = Math.max(1, rh.wagons - 1); rh.cargos.pop(); rh.shake = 8; rh.judge = {text: 'LÂCHÉ', col: '#ff6a5a', t: 24}; } }
+  for (const s of rh.sparks) { s.x += s.vx; s.y += s.vy; s.vx *= .92; s.vy *= .92; s.life--; } rh.sparks = rh.sparks.filter(s => s.life > 0);
+  if (rh.tick % 6 === 0 && rh.mode === 'play') rh.puffs.push({x: agX(now), y: 0, life: 46, r: 2});
+  for (const p of rh.puffs) { p.y += .7; p.r += .06; p.life--; } rh.puffs = rh.puffs.filter(p => p.life > 0);
+  if (rh.shake) rh.shake--;
+  if (rh.judge && --rh.judge.t <= 0) rh.judge = null;
+  rhCheckEnd(now);
+}
+// où est la locomotive (décalage de côté) au temps t : sur la voie du wagon pendant un aiguillage bien pris (aller, voie de garage, retour), sinon au milieu
 function agX(t) {
-  for (const n of rh.notes) { if (n.t > t) break; if (n.ok && t < n.t + 2 * n.d) return n.side * AG.SIDE * Math.sin(Math.PI * (t - n.t) / (2 * n.d)); }
+  for (const n of rh.notes) {
+    if (n.t > t) break; if (!n.ok || n.both) continue; const u = t - n.t, L = n.broken ? 0 : n.len;
+    if (u < n.d) return n.side * AG.SIDE * Math.sin(Math.PI / 2 * u / n.d);
+    if (u < n.d + L) return n.side * AG.SIDE;
+    if (u < 2 * n.d + L) return n.side * AG.SIDE * Math.cos(Math.PI / 2 * (u - n.d - L) / n.d);
+  }
   return 0;
 }
-function agFx(n, w, wrong) {
-  rh.judge = {text: w ? w[1] : wrong ? 'IMPASSE' : 'RATÉ', col: w ? w[3] : '#ff6a5a', t: 26};
-  if (!w) { rh.wagons = Math.max(1, rh.wagons - 1); if (wrong) rh.shake = 10; return; }
-  rh.wagons = Math.min(12, rh.wagons + 1);
-  for (let i = 0; i < 10; i++) { const a = Math.random() * Math.PI * 2, v = .6 + Math.random() * 1.6; rh.sparks.push({x: AG.X + n.side * AG.SIDE, y: AG.Y - 4, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 20, col: AG_CARGO[n.cargo]}); }
+function agFx(n, w, text) {
+  rh.judge = {text: w ? w[1] : text || 'RATÉ', col: w ? w[3] : '#ff6a5a', t: 26};
+  if (!w) { if (rh.wagons > 1) { rh.wagons--; rh.cargos.pop(); } if (text) rh.shake = 10; return; }
+  if (rh.wagons < 12) { rh.wagons++; rh.cargos.push(n.cargo); }
+  for (let i = 0; i < 12; i++) { const a = Math.random() * Math.PI * 2, v = .6 + Math.random() * 1.6; rh.sparks.push({x: AG.X + (n.side || 0) * AG.SIDE, y: AG.Y - 4, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 20, col: i % 2 ? '#ffd84a' : '#fff4c8'}); }
 }
 function agHit(side, now = rhNow()) {
   rh.tap = rh.tick; rh.tapSide = side; rhPlayKit(side < 0 ? 1 : 2, .35);
   let near = null;
   for (const n of rh.notes) { if (n.judged) continue; if (n.t - now > .2) break; if (Math.abs(n.t - now) <= RH.WIN.at(-1)[0] && (!near || Math.abs(n.t - now) < Math.abs(near.t - now))) near = n; }
   if (!near) return;
-  if (near.side !== side) { rhMissed(near); near.wrong = true; agFx(near, null, true); return; }  // le mauvais côté : l'impasse
+  if (near.both) {  // un croisement : les deux côtés en moins de 120 ms, jugé sur le premier
+    if (!near.first) { near.first = {side, at: now, dt: now - near.t}; return; }
+    if (side === near.first.side) return;
+    const w = rhHit(near, near.first.dt); near.ok = !!w; agFx(near, w); return;
+  }
+  if (near.side !== side) { rhMissed(near); near.wrong = true; agFx(near, null, 'IMPASSE'); return; }  // le mauvais côté : l'impasse
   const w = rhHit(near, now - near.t); near.ok = !!w; agFx(near, w);
+  if (w && near.len) rh.held = near;
 }
-const AG_BG = cnv(W, 256, b => {  // l'herbe tramée, en boucle verticale
-  const r = seeded(17); for (let y = 0; y < 256; y++) for (let x = 0; x < W; x += 2) px(b, (x + y) % 4 ? '#2a5a2a' : '#2e6230', x, y, 2, 1);
-  for (let i = 0; i < 90; i++) px(b, r() < .5 ? '#3a7a3a' : '#22482a', r() * W, r() * 256, 2, 1);
-  for (let i = 0; i < 18; i++) { const x = r() < .5 ? r() * 90 : 230 + r() * 90, y = r() * 256; px(b, '#163a1a', x - 6, y - 2, 13, 9); px(b, '#1e5a26', x - 5, y - 5, 11, 9); px(b, '#2e7a34', x - 3, y - 4, 5, 4); }  // des arbres
-});
-function agRail(pts, col) {  // deux rails le long des points, tracés pixel par pixel
-  for (let k = 1; k < pts.length; k++) { const [x1, y1] = pts[k - 1], [x2, y2] = pts[k], n = Math.max(1, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)))); for (let j = 0; j <= n; j++) for (const o of [-4, 4]) px(g, col, x1 + (x2 - x1) * j / n + o, y1 + (y2 - y1) * j / n, 1, 1); }
+// le paysage, par tranches de 256 pixels qui défilent : champs, forêt, village, rivière (la voie au milieu reste libre)
+const agMix = (a, c, t) => '#' + [1, 3, 5].map(i => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(c.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('');
+function agTree(b, x, y, r, s) { px(b, '#0e2a12', x - s + 2, y - s + 3, 2 * s, 2 * s); for (let j = -s; j <= s; j++) for (let i = -s; i <= s; i++) { const d = Math.hypot(i, j); if (d <= s + .3) px(b, d > s - 1.2 ? '#1a4a20' : i + j < -s * .4 ? '#5aa04a' : (i * 3 + j) % 4 ? '#2e7a34' : '#3a8a3a', x + i, y + j); } }
+const AG_LAND = ['champs', 'forêt', 'village', 'rivière'].map((kind, ki) => cnv(W, 256, b => {
+  const r = seeded(17 + ki * 31);
+  for (let y = 0; y < 256; y++) for (let x = 0; x < W; x += 2) px(b, (x + y) % 4 ? '#3a6e2e' : '#42783a', x, y, 2, 1);
+  for (let i = 0; i < 140; i++) px(b, r() < .5 ? '#4e8a42' : '#2e5a26', r() * W, r() * 256, 2, 1);
+  const away = x => x < 120 || x > 200;  // loin de la voie
+  if (kind === 'champs') for (const [x0, w, c1, c2] of [[8, 96, '#c8a84a', '#a8883a'], [216, 96, '#7a9a3a', '#5a7a2a']]) for (let y = 10; y < 246; y += 4) { px(b, c1, x0, y, w, 2); px(b, c2, x0, y + 2, w, 1); }
+  if (kind === 'forêt') for (let i = 0; i < 46; i++) { const x = r() < .5 ? 6 + r() * 108 : 210 + r() * 104, y = r() * 256; agTree(b, x, y, r, 5 + (r() * 4 | 0)); }
+  if (kind === 'village') for (let i = 0; i < 8; i++) {  // des maisons : un toit de tuiles et sa faîtière, un mur, une cheminée
+    const x = i % 2 ? 216 + (r() * 60 | 0) : 16 + (r() * 60 | 0), y = 14 + i * 30, w = 26 + (r() * 10 | 0), roof = ['#a8402a', '#6a4a8a', '#8a5a2a'][i % 3];
+    px(b, '#1e2a14', x + 3, y + 3, w, 20); px(b, '#d8c8a8', x, y, w, 20); for (let k = 0; k < 10; k++) px(b, k % 2 ? roof : agMix(roof, '#000000', .25), x - 1, y + k, w + 2, 1); px(b, agMix(roof, '#ffffff', .3), x - 1, y + 9, w + 2, 1); px(b, '#4a3a2a', x + w - 7, y - 3, 4, 5); px(b, '#5a4030', x + 4, y + 14, 5, 6); px(b, '#8ac8ff', x + w - 10, y + 13, 5, 4);
+  }
+  if (kind === 'rivière') { for (let y = 0; y < 256; y++) { const c = 54 + Math.round(Math.sin(y / 40) * 22); for (let x = c - 22; x < c + 22; x++) px(b, (x + y) % 6 ? '#2a5a9a' : '#3a6aaa', x, y); px(b, '#c8b888', c - 24, y, 2, 1); px(b, '#c8b888', c + 22, y, 2, 1); } for (let i = 0; i < 18; i++) agTree(b, 230 + r() * 80, r() * 256, r, 5 + (r() * 3 | 0)); }
+  for (let i = 0; i < 26; i++) { const x = r() * W, y = r() * 256; if (away(x)) { px(b, ['#ffffff', '#ffd84a', '#ff8ad8'][i % 3], x, y, 1, 1); } }  // des fleurs
+  // le ballast de la ligne : du gravier, ses bords
+  for (let y = 0; y < 256; y++) for (let x = AG.X - 14; x <= AG.X + 14; x++) px(b, (x * 7 + y * 13) % 5 ? '#6a6458' : (x + y) % 3 ? '#8a8270' : '#4a463e', x, y);
+  px(b, '#2e2a22', AG.X - 15, 0, 1, 256); px(b, '#2e2a22', AG.X + 15, 0, 1, 256);
+}));
+function agRail(pts, col, ties) {  // deux rails le long des points, avec leur ombre ; des traverses dessous
+  if (ties) for (let k = 0; k < pts.length; k += 2) { const [x, y] = pts[k]; px(g, '#3a2414', x - 7, y, 15, 3); px(g, '#5a3a20', x - 7, y, 15, 1); }
+  for (let k = 1; k < pts.length; k++) { const [x1, y1] = pts[k - 1], [x2, y2] = pts[k], n = Math.max(1, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1))));
+    for (let j = 0; j <= n; j++) for (const o of [-4, 4]) { const x = x1 + (x2 - x1) * j / n + o, y = y1 + (y2 - y1) * j / n; px(g, '#2a2a30', x + 1, y, 1, 1); px(g, col, x, y, 1, 1); } }
+}
+// un wagon vu de dessus, selon son chargement
+function agWagon(x, y, cargo) {
+  const k = AG_CARGO[cargo % AG_CARGO.length]; x = Math.round(x); y = Math.round(y);
+  px(g, '#101016', x - 8, y - 7, 17, 15); px(g, '#2a2a34', x - 9, y - 4, 2, 2); px(g, '#2a2a34', x + 8, y - 4, 2, 2); px(g, '#2a2a34', x - 9, y + 3, 2, 2); px(g, '#2a2a34', x + 8, y + 3, 2, 2);  // la caisse et ses roues
+  if (k === 'rondins') { px(g, '#6a4220', x - 7, y - 6, 15, 13); for (let j = 0; j < 4; j++) { px(g, '#a8743a', x - 6, y - 5 + j * 3, 13, 2); px(g, '#d8a868', x - 6, y - 5 + j * 3, 2, 2); } }
+  else if (k === 'caisses') { px(g, '#4a3a2a', x - 7, y - 6, 15, 13); for (const [dx, dy] of [[-6, -5], [1, -5], [-6, 1], [1, 1]]) { px(g, '#c89a5a', x + dx, y + dy, 6, 5); px(g, '#8a6a3a', x + dx, y + dy + 2, 6, 1); } }
+  else if (k === 'charbon') { px(g, '#5a3a2a', x - 7, y - 6, 15, 13); px(g, '#1a1a1e', x - 6, y - 5, 13, 11); for (let j = 0; j < 8; j++) px(g, '#4a4a52', x - 5 + (j * 5) % 11, y - 4 + (j * 3) % 9, 2, 1); }
+  else if (k === 'citerne') { px(g, '#3a3a44', x - 7, y - 6, 15, 13); px(g, '#c8ccd8', x - 6, y - 5, 13, 11); px(g, '#f0f4ff', x - 6, y - 5, 13, 2); px(g, '#8a8e9a', x - 6, y + 4, 13, 2); px(g, '#ff5a4a', x - 1, y - 1, 3, 3); }
+  else if (k === 'voyageurs') { px(g, '#2a4a8a', x - 7, y - 6, 15, 13); px(g, '#4a6aaa', x - 7, y - 6, 15, 2); for (let j = 0; j < 3; j++) { px(g, '#ffe8a8', x - 6, y - 3 + j * 3, 2, 2); px(g, '#ffe8a8', x + 5, y - 3 + j * 3, 2, 2); } }
+  else { px(g, '#7a4a2a', x - 7, y - 6, 15, 13); for (let j = 0; j < 12; j++) px(g, ['#ff5a4a', '#ffd84a', '#7ee07a', '#ff9a3a'][j % 4], x - 6 + (j * 7) % 13, y - 5 + (j * 5) % 11, 2, 2); }
+}
+function agLoco(x, y) {  // la locomotive à vapeur : la cheminée devant, la chaudière noire filetée de rouge, la cabine, puis le tender à charbon
+  x = Math.round(x); y = Math.round(y);
+  px(g, '#08080c', x - 9, y - 16, 19, 34); px(g, '#c8461a', x - 9, y - 18, 19, 3);  // le chasse-pierres
+  px(g, '#1a1a22', x - 7, y - 15, 15, 18); px(g, '#2e2e3a', x - 7, y - 15, 15, 2); px(g, '#c83a2a', x - 7, y - 9, 15, 1); px(g, '#c83a2a', x - 7, y - 3, 15, 1); px(g, '#4a4a58', x - 2, y - 15, 5, 18);  // la chaudière
+  px(g, '#0a0a0e', x - 3, y - 14, 7, 6); px(g, '#3a3a46', x - 2, y - 13, 5, 4); px(g, '#ffd84a', x - 1, y - 7, 3, 3);  // la cheminée, la cloche
+  px(g, '#3a1a14', x - 9, y + 3, 19, 10); px(g, '#7a2e22', x - 8, y + 4, 17, 8); px(g, '#a8402a', x - 8, y + 4, 17, 2); px(g, '#8ac8ff', x - 6, y + 6, 4, 3); px(g, '#8ac8ff', x + 3, y + 6, 4, 3);  // la cabine
+  px(g, '#1a1a1e', x - 8, y + 13, 17, 5); for (let j = 0; j < 5; j++) px(g, '#4a4a52', x - 7 + j * 3, y + 14 + (j % 2), 2, 1);  // le tender
 }
 function agDraw() {
   const now = rhNow(), cam = now * AG.V, sh = rh.shake ? (rh.shake % 2 ? 2 : -2) : 0, Y = t => AG.Y - (t * AG.V - cam);
-  const oy = Math.round(((cam % 256) + 256) % 256); g.drawImage(AG_BG, sh, oy - 256); g.drawImage(AG_BG, sh, oy);
-  // la voie du milieu : traverses qui défilent, deux rails
-  for (let y = (Math.round(cam) % 10) - 10; y < H; y += 10) px(g, '#5a4028', AG.X - 8 + sh, y, 17, 3);
-  px(g, '#a8a8b8', AG.X - 4 + sh, 0, 1, H); px(g, '#a8a8b8', AG.X + 4 + sh, 0, 1, H);
-  // les aiguillages à venir : la voie du wagon (aller-retour) et celle de l'impasse (qui s'arrête sur un butoir rouge)
+  // le paysage : une tranche par 256 pixels, choisie selon son numéro (le même trajet à chaque partie du morceau)
+  const c0 = Math.floor(cam / 256), oy = Math.round(cam - c0 * 256);
+  for (let k = -1; k <= 1; k++) { const ci = c0 + k, land = AG_LAND[(((ci >> 1) % 4) + 4) % 4]; g.drawImage(land, sh, oy - 256 * k); }
+  // la voie du milieu : traverses qui défilent, deux rails ombrés ; des poteaux télégraphiques et leur fil
+  for (let y = (Math.round(cam) % 10) - 10; y < H; y += 10) { px(g, '#3a2414', AG.X - 8 + sh, y, 17, 3); px(g, '#5a3a20', AG.X - 8 + sh, y, 17, 1); }
+  for (const o of [-4, 4]) { px(g, '#2a2a30', AG.X + o + 1 + sh, 0, 1, H); px(g, '#c8c8d8', AG.X + o + sh, 0, 1, H); }
+  px(g, '#1a1a1e', AG.X + 40 + sh, 0, 1, H);
+  for (let y = (Math.round(cam) % 64) - 64; y < H; y += 64) { px(g, '#3a2414', AG.X + 38 + sh, y, 5, 5); px(g, '#6a4a2a', AG.X + 39 + sh, y + 1, 3, 3); px(g, '#4a3420', AG.X + 34 + sh, y + 1, 13, 1); }
+  // les aiguillages à venir : la voie du wagon (aller, garage, retour) et celle de l'impasse (sur un butoir rouge) ; un croisement : un panneau
   for (const n of rh.notes) {
-    const y0 = Y(n.t); if (y0 < -80) break; if (y0 > H + 10 && n.t < now - 2 * n.d - .5) continue;
-    const L = 2 * n.d * AG.V, arc = (s, u) => [AG.X + sh + s * AG.SIDE * Math.sin(Math.PI * u), y0 - u * L];
-    const good = Array.from({length: 13}, (_, k) => arc(n.side, k / 12)).reverse(), bad = Array.from({length: 7}, (_, k) => arc(-n.side, k / 12)).reverse();
-    for (const pts of [good, bad]) for (const [x, y] of pts) px(g, '#5a4028', x - 7, y, 15, 2);
-    agRail(good, '#c8c8d8'); agRail(bad, '#8a8a98');
-    const [bx, by] = arc(-n.side, .5); px(g, '#6a1a1a', bx - 7, by - 3, 15, 5); px(g, '#ff5a4a', bx - 6, by - 2, 13, 2);  // le butoir
-    if (!n.judged || !n.ok) { const [cx, cy] = arc(n.side, .5); px(g, '#1a1a22', cx - 6, cy - 7, 13, 12); px(g, AG_CARGO[n.cargo], cx - 5, cy - 6, 11, 9); px(g, '#ffffff', cx - 4, cy - 5, 4, 1); }  // le wagon à prendre
-    if (!n.judged && y0 > 0 && y0 < AG.Y + 4) {  // la flèche de l'aiguillage
-      const ax = AG.X + sh + n.side * 14, f = n.side;
-      for (let k = 0; k < 5; k++) px(g, '#fff4c8', ax + f * k - (f > 0 ? 0 : 1), y0 - 2 - (4 - k), 1, 2 * (4 - k) + 1);
+    const y0 = Y(n.t); if (y0 < -120) break; if (y0 > H + 10 && n.t < now - 2 * n.d - n.len - .5) continue;
+    if (n.both) {
+      if (n.judged && y0 > AG.Y + 10) continue;
+      for (const s of [-1, 1]) { const pts = Array.from({length: 9}, (_, k) => [AG.X + sh + s * (k - 4) * 6, y0 - 12 + k * 3]); agRail(pts, n.ok ? '#ffd84a' : '#c8c8d8', false); }
+      if (!n.judged) { const x = AG.X + sh + 24; for (let j = -5; j <= 5; j++) { const w = 5 - Math.abs(j); px(g, '#1a1a10', x - w - 1, y0 - 18 + j, 2 * w + 3, 1); px(g, '#ffd84a', x - w, y0 - 18 + j, 2 * w + 1, 1); } px(g, '#1a1a10', x, y0 - 21, 1, 4); px(g, '#1a1a10', x, y0 - 15, 1, 1); px(g, '#3a2a1a', x, y0 - 12, 1, 12);
+        for (const s of [-1, 1]) for (let k = 0; k < 5; k++) px(g, '#fff4c8', AG.X + sh + s * (14 + k), y0 - 2 - (4 - k), 1, 2 * (4 - k) + 1); }
+      continue;
     }
+    const D = n.d * AG.V, L = (n.broken ? 0 : n.len) * AG.V, total = 2 * D + L;
+    const at = (s, v) => { const x = v < D ? Math.sin(Math.PI / 2 * v / D) : v < D + L ? 1 : Math.cos(Math.PI / 2 * (v - D - L) / D); return [AG.X + sh + s * AG.SIDE * Math.max(0, x), y0 - v]; };
+    const steps = Math.max(12, Math.ceil(total / 6)), good = Array.from({length: steps + 1}, (_, k) => at(n.side, k / steps * total)).reverse(), bad = Array.from({length: 7}, (_, k) => at(-n.side, k / 12 * 2 * D)).reverse();
+    agRail(good, n.len ? '#ffd84a' : '#c8c8d8', true); agRail(bad, '#8a8a98', true);
+    const [bx, by] = at(-n.side, D); px(g, '#2a0a0a', bx - 8, by - 3, 17, 6); px(g, '#c83a2a', bx - 7, by - 3, 15, 4); px(g, '#ffffff', bx - 5, by - 2, 2, 1); px(g, '#ffffff', bx + 4, by - 2, 2, 1);  // le butoir
+    if (!n.judged || !n.ok) { const [cx, cy] = at(n.side, D + L / 2); agWagon(cx, cy, n.cargo); }  // le wagon à prendre
+    if (!n.judged && y0 > 0 && y0 < AG.Y + 4) { const ax = AG.X + sh + n.side * 14, f = n.side; for (let k = 0; k < 5; k++) px(g, '#fff4c8', ax + f * k - (f > 0 ? 0 : 1), y0 - 2 - (4 - k), 1, 2 * (4 - k) + 1); }  // la flèche de l'aiguillage
   }
-  // la fumée, puis le train : la locomotive et ses wagons, qui suivent la voie avec un peu de retard
-  for (const p of rh.puffs) { g.globalAlpha = p.life / 60; px(g, '#e8e8f0', AG.X + p.x + sh - 3 + Math.sin(p.life / 6) * 2, AG.Y - 14 + p.y - 3, 6 + (40 - p.life) / 8, 5); g.globalAlpha = 1; }
-  for (let k = Math.min(rh.wagons, 12); k >= 1; k--) { const x = AG.X + agX(now - k * 15 / AG.V) + sh, y = AG.Y + k * 15; if (y > H + 10) continue; px(g, '#14141c', x - 7, y - 6, 15, 13); px(g, AG_CARGO[(k - 1) % AG_CARGO.length], x - 6, y - 5, 13, 10); px(g, '#ffffff', x - 5, y - 4, 4, 1); }
-  { const x = AG.X + agX(now) + sh, y = AG.Y; px(g, '#14141c', x - 8, y - 12, 17, 22); px(g, '#2a3a6a', x - 7, y - 11, 15, 20); px(g, '#4a6aaa', x - 7, y - 11, 15, 2); px(g, '#ffd84a', x - 3, y - 14, 7, 3); px(g, '#1a1a22', x - 3, y - 6, 7, 6); px(g, '#8ac8ff', x - 2, y - 5, 5, 3); }
+  // la fumée, puis le train : la locomotive et ses wagons (ceux pris en route), qui suivent la voie avec un peu de retard
+  for (const p of rh.puffs) { g.globalAlpha = p.life / 70; const s = Math.round(p.r * 2); px(g, '#e8e8f0', AG.X + p.x + sh - s / 2 + Math.sin(p.life / 6) * 2, AG.Y - 14 + p.y - s / 2, s, s); g.globalAlpha = 1; }
+  for (let k = Math.min(rh.wagons, 12) - 1; k >= 1; k--) { const y = AG.Y + 18 + k * 17; if (y > H + 10) continue; agWagon(AG.X + agX(now - (18 + k * 17) / AG.V) + sh, y, rh.cargos[k] ?? k); }
+  agLoco(AG.X + agX(now) + sh, AG.Y);
   for (const s of rh.sparks) { g.globalAlpha = s.life / 20; px(g, s.col, s.x + sh, s.y, 2, 2); g.globalAlpha = 1; }
-  if (rh.tick - rh.tap < 6 && rh.mode === 'play') { const f = rh.tapSide, ax = AG.X + sh + f * 40; for (let k = 0; k < 6; k++) px(g, '#fff4c8', ax + f * k, AG.Y - 5 + k, 1, 11 - 2 * k); }  // le côté choisi
+  if (rh.tick - rh.tap < 6 && rh.mode === 'play') { const f = rh.tapSide || 1, ax = AG.X + sh + f * 40; for (let k = 0; k < 6; k++) px(g, '#fff4c8', ax + f * k, AG.Y - 5 + k, 1, 11 - 2 * k); }  // le côté choisi
   if (rh.judge && rh.mode === 'play') pxFont(g, rh.judge.text, AG.X, AG.Y - 34, rh.judge.col, 7, 'center');
   if (rh.mode !== 'ready' && rh.mode !== 'load') {
     rhProgress(now, '#ffd84a'); pxFont(g, String(rh.score).padStart(7, '0'), 4, 14, '#ffffff', 7);
     if (rh.combo > 4) pxFont(g, rh.combo + ' combo', W - 4, 14, '#ffd84a', 7, 'right');
     pxFont(g, rh.wagons + ' wagons', W - 4, 26, '#fff4c8', 6, 'right');
-    pxFont(g, rhStarTxt(rh.stars), W / 2, H - 6, '#c8e8c8', 6, 'center');
+    pxFont(g, rhStarTxt(rh.stars), W / 2, H - 6, '#e8f4d8', 6, 'center');
   }
   if (rh.mode === 'play' && now < 0) pxFont(g, String(Math.ceil(-now)), W / 2, 60, '#ffd84a', 16, 'center');
   rhScreens(60);
   if (rh.tick % 15 === 0) cv.setAttribute('aria-label', 'Aiguillage, ' + (rh.info?.name || '') + ' : ' + ({ready: 'prêt', load: 'chargement', play: 'en jeu', pause: 'pause', over: 'fini'}[rh.mode] || rh.mode) + ', score ' + rh.score + ', combo ' + rh.combo + ', ' +
     Object.entries(rh.counts).map(([k, v]) => k.toLowerCase() + ' ' + v).join(', ') + ', ' + rh.wagons + ' wagons.');
 }
-cv.onpointerdown = e => { e.preventDefault(); if (!rh) return; if (rh.mode !== 'play') { rhPress(); return; } const [x] = cpos(e); agHit(x < W / 2 ? -1 : 1); };  // un clic : la moitié gauche ou droite
+cv.onpointerdown = e => { e.preventDefault(); if (!rh) return; if (rh.mode !== 'play') { rhPress(); return; } const [x] = cpos(e), k = x < W / 2 ? 'ArrowLeft' : 'ArrowRight'; rh.keysDown.add(k); agHit(agSideOf(k)); };  // un clic : la moitié gauche ou droite
+addEventListener('pointerup', () => { rh?.keysDown?.delete('ArrowLeft'); rh?.keysDown?.delete('ArrowRight'); });
 document.addEventListener('keydown', e => {
   if (!keyOk(e) || !rh || e.ctrlKey || e.altKey || e.metaKey) return; const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (k === 'p' || k === 'Escape') { rhPause(); return; }
-  if (rh.mode === 'play') { const s = AG_LEFT.includes(k) ? -1 : AG_RIGHT.includes(k) ? 1 : 0; if (s) { e.preventDefault(); if (!e.repeat) agHit(s); } return; }
+  if (rh.mode === 'play') { const s = agSideOf(k); if (s) { e.preventDefault(); rh.keysDown.add(k); if (!e.repeat) agHit(s); } return; }
   if (k === ' ' || k === 'Enter') { e.preventDefault(); if (!e.repeat) rhPress(); }
 });
-document.addEventListener('keyup', e => { if (e.key === ' ' && keyOk(e)) e.preventDefault(); });
+document.addEventListener('keyup', e => { if (!rh) return; rh.keysDown?.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key === ' ' && keyOk(e)) e.preventDefault(); });
 cv.__rh = {st: () => rh, finish: hist => { rh.hist = hist; rh.mode = 'play'; rhCheckEnd(1e9); }};  // pour le test « local »
 {  // la manette : la croix et les boutons de gauche (X, A, gâchette gauche) à gauche, ceux de droite (B, Y, gâchette droite) à droite, Start lance, Select met en pause
   const KEY = {14: 'd', 15: 'k', 2: 'd', 0: 'd', 4: 'd', 1: 'k', 3: 'k', 5: 'k', 9: ' ', 8: 'p'}, held = new Set();
@@ -1192,17 +1264,22 @@ cv.__rh = {st: () => rh, finish: hist => { rh.hist = hist; rh.mode = 'play'; rhC
   };
   requestAnimationFrame(loop);
 }
-{  // vérification : aiguillages séparés d'au moins un quart de temps, jamais plus de 5 fois le même côté ; le jugement (à l'heure, en retard, mauvais côté, raté) ;
-   // la locomotive suit la voie du wagon pendant un aiguillage bien pris
+{  // vérification : aiguillages séparés d'au moins un quart de temps, jamais plus de 5 fois le même côté, des voies de garage et des croisements ;
+   // le jugement (à l'heure, en retard, mauvais côté, croisement à deux mains ou à une seule, voie de garage lâchée) ; la locomotive suit la voie
   const c = rhCompose(RH_SONGS[3]), ch = Object.keys(RH_DIFFS).map(d => RHG.chart(rhChart(c, d), c, d)), bad = [], beat = 60 / RH_SONGS[3].bpm;
-  const runs = x => { let m = 1, r = 1; for (let i = 1; i < x.length; i++) { r = x[i].side === x[i - 1].side ? r + 1 : 1; m = Math.max(m, r); } return m; };
-  if (ch.some(x => x.length < 20 || runs(x) > 5 || x.some((n, i) => Math.abs(n.side) !== 1 || i && n.t - x[i - 1].t < AG.MIN * beat - 1e-3))) bad.push('aiguillages');
+  const runs = x => { let m = 1, r = 1; for (let i = 1; i < x.length; i++) { r = x[i].side === x[i - 1].side && x[i].side ? r + 1 : 1; m = Math.max(m, r); } return m; };
+  if (ch.some(x => x.length < 20 || runs(x) > 5 || x.some((n, i) => (n.both ? n.side !== 0 || n.len : Math.abs(n.side) !== 1) || i && (n.t - x[i - 1].t < AG.MIN * beat - 1e-3 || x[i - 1].t + 2 * x[i - 1].d + x[i - 1].len > n.t + 1e-6)))) bad.push('aiguillages');
+  if (!ch.slice(1).some(x => x.some(n => n.len)) || !ch.some(x => x.some(n => n.both))) bad.push('garages ou croisements');
   if (!(rhStars(ch[0], c.len, 1) < rhStars(ch[3], c.len, 1))) bad.push('étoiles');
-  const keep = rh, notes = RHG.chart([0, 1, 2, 3].map(t => ({t, lane: t % 2 ? 3 : 0})), {step: .25}).map(n => ({...n, judged: false}));
-  rh = {tick: 0, mode: 'play', score: 0, combo: 0, maxCombo: 0, counts: {PARFAIT: 0, BIEN: 0, OK: 0, 'RATÉ': 0}, dts: [], sparks: [], notes, wagons: 1};
+  const keep = rh, notes = RHG.chart([0, 1, 2, 3, 4].map(t => ({t, lane: t % 2 ? 3 : 0, len: t === 4 ? 1.6 : 0})), {step: .25}).map(n => ({...n, judged: false}));
+  rh = {tick: 0, mode: 'play', score: 0, combo: 0, maxCombo: 0, counts: {PARFAIT: 0, BIEN: 0, OK: 0, 'RATÉ': 0}, dts: [], sparks: [], notes, c: {len: 99}}; RHG.reset();
   agHit(-1, .01); agHit(1, 1.08); agHit(-1, 2.02); agHit(-1, 3);  // gauche à l'heure, droite en retard, gauche à l'heure, puis gauche au lieu de droite : l'impasse
   const mid = agX(notes[0].t + notes[0].d), back = agX(notes[0].t + 2 * notes[0].d + 1e-3);
-  if (rh.counts.PARFAIT !== 2 || rh.counts.BIEN !== 1 || rh.counts['RATÉ'] !== 1 || !notes[3].wrong || Math.abs(mid + AG.SIDE) > 1e-6 || Math.abs(back) > 1e-6 || rh.wagons !== 3) bad.push('jugement ' + JSON.stringify(rh.counts) + ' ' + mid + ' ' + rh.wagons);
+  rh.keysDown.add('d'); agHit(-1, 4); const long = notes[4].len > 0, on = agX(4 + notes[4].d + .05); agStep(4.3); rh.keysDown.delete('d'); agStep(4.4);  // la voie de garage, lâchée tôt
+  notes.push({t: 6, side: 0, both: true, d: .3, len: 0, judged: false}, {t: 7, side: 0, both: true, d: .3, len: 0, judged: false});
+  agHit(-1, 6); agHit(1, 6.05); agHit(1, 7); agStep(7.3);  // le croisement à deux mains, puis à une seule
+  if (rh.counts.PARFAIT !== 4 || rh.counts.BIEN !== 1 || rh.counts['RATÉ'] !== 2 || !notes[3].wrong || Math.abs(mid + AG.SIDE) > 1e-6 || Math.abs(back) > 1e-6 || !long || Math.abs(on + AG.SIDE) > 1e-6 || !notes[4].broken || !notes[6].missed)
+    bad.push('jugement ' + JSON.stringify(rh.counts) + ' ' + mid + ' ' + on + ' ' + long);
   rh = keep;
   console.assert(!bad.length, 'aiguillage', bad);
 }
