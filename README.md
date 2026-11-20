@@ -10,6 +10,7 @@ Un jeu de rythme en train à vapeur, à travers champs, forêts, villages et riv
 - La **flèche** devant l'aiguillage montre le côté du wagon ; l'autre voie finit sur un **butoir rouge**. Le mauvais côté mène à l'**impasse**.
 - Une **voie de garage dorée** : garde la touche jusqu'à ce qu'elle rejoigne la ligne, sinon le combo casse.
 - Un **croisement** (panneau jaune) : les deux côtés presque ensemble.
+- **Touches au choix** : dans les options, clique une case puis appuie sur la touche voulue. Les flèches et la manette marchent toujours.
 - **Manette** : la croix et les boutons de gauche à gauche, ceux de droite à droite.
 
 ## Précision et points

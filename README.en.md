@@ -10,6 +10,7 @@ A steam train rhythm game, through fields, forests, villages and rivers. At ever
 - The **arrow** in front of the switch shows the wagon's side; the other track ends at a **red buffer stop**. The wrong side leads to a **dead end**.
 - A **golden siding**: hold the key until it rejoins the line, or the combo breaks.
 - A **crossing** (yellow sign): both sides almost together.
+- **Keys of your choice**: in the options, click a box then press the key you want. Arrows and the gamepad always work.
 - **Gamepad**: the d-pad and left buttons for left, the right buttons for right.
 
 ## Accuracy and points
