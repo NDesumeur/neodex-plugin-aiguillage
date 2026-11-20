@@ -1,9 +1,9 @@
 {
   "pluginId": "neodex.aiguillage",
   "repo": "NDesumeur/neodex-plugin-aiguillage",
-  "version": "1.0.1",
-  "sha256": "5ec2bbf7a880f467e63ca0259cbd685039db2422ab7bc4acac6e4b65393a0af4",
-  "approvedAt": "2026-11-20T13:08:01.799Z",
+  "version": "1.0.2",
+  "sha256": "bee426086d930ffa95e239f52b682fb37004605ba1c517a8d282a4d9bc8fa7fe",
+  "approvedAt": "2026-11-20T18:05:08.318Z",
   "neobase": ">=4.1.0",
-  "signature": "YzBD8wQgRnrZexEZU5hsJp7jUHLfnV5wCCaq89PV0p+zepTwe+MjCYKthtXyb5wN2lFZRPa50Ga+NWwi5rEXCQ=="
+  "signature": "ehKSHihCg9sVcr5ILv7GxUla4q+wiMZlukhMUdcPd5c5zJ1uy7yvwtFbpptcLIAwI9314LAonORQdbdS+0a3BA=="
 }
