@@ -1,9 +1,9 @@
 {
   "id": "neodex.aiguillage",
   "name": "Aiguillage",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "author": "NDesumeur",
-  "description": "Jeu de rythme en train à travers la campagne : à chaque aiguillage, une voie porte un wagon et l'autre finit sur un butoir. Change l'aiguillage du bon côté (← ou D/F à gauche, → ou J/K à droite, ou un clic sur la moitié de l'écran) pile quand la locomotive y arrive. Chaque wagon pris allonge le train, une impasse le raccourcit. Les 1200 morceaux de Rythme notés de 1 à 10 étoiles, ou des niveaux créés depuis ta musique ; combo, note de S à D. Se joue à la manette. Touches au choix dans les options.",
+  "description": "Jeu de rythme en train à travers la campagne : à chaque aiguillage, une voie porte un wagon et l'autre finit sur un butoir. Change l'aiguillage du bon côté (← ou D/F à gauche, → ou J/K à droite, ou un clic sur la moitié de l'écran) pile quand la locomotive y arrive. Chaque wagon pris allonge le train, une impasse le raccourcit. Les 1200 morceaux de Rythme notés de 1 à 10 étoiles, ou des niveaux créés depuis ta musique ; combo, note de S à D. Se joue à la manette. Touches au choix dans les options. Nouveau : les wagons livrés bâtissent ta ville, partie après partie (12 bâtiments). Aussi : les saisons, des tunnels où l'on joue à l'oreille, des ponts-levis et des trains qui arrivent en face.",
   "icon": "icon.png",
   "entry": "index.js",
   "view": "aiguillage",

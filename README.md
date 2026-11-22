@@ -42,3 +42,11 @@ Tes scores et notes par niveau et tes réglages sont enregistrés par NeoDex, sa
 Dans NeoDex : **NeoStore → À découvrir → Aiguillage → Installer**.
 
 Développer un plugin : voir le [SDK NeoDex](https://github.com/NDesumeur/neodex-sdk).
+
+## Ma ville
+
+Chaque wagon pris est livré à ta ville : bois, caisses, charbon, eau, voyageurs ou fruits, selon le wagon. Partie après partie, ces livraisons bâtissent douze bâtiments le long de la voie : la gare, la scierie, les maisons, le marché, la mine, le château d'eau, l'hôtel, l'école, le moulin, l'usine, la fontaine et le théâtre. Chacun demande une quantité d'une marchandise. La carte « Ma ville », sous la liste des morceaux, montre ce qui est bâti et ce qu'il manque pour le suivant ; l'écran de fin dit combien de wagons tu as livrés et ce qui vient d'être construit.
+
+## Saisons, tunnels, ponts-levis et trains en face
+
+Chaque morceau a sa saison : printemps (cerisiers en fleurs, pétales), été, automne (feuillage roux, feuilles qui tombent) ou hiver (neige, rivières gelées, flocons). Dès Normal, le train passe dans un tunnel pendant 4 mesures toutes les 24 mesures : les aiguillages n'y apparaissent qu'au dernier moment, il faut jouer à l'oreille (les notes graves à gauche, les aiguës à droite). Une voie dorée sur deux passe sur un pont-levis : il ne s'abaisse que si tu tiens la touche. En Difficile et en Expert, un train rouge arrive parfois en face sur une voie : il ne faut surtout pas aiguiller de ce côté (« ÉVITÉ » si tu restes, « COLLISION » sinon).

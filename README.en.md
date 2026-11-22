@@ -42,3 +42,11 @@ Your scores and grades per level and your settings are stored by NeoDex, backed 
 In NeoDex: **NeoStore → Discover → Aiguillage → Install**.
 
 Building a plugin: see the [NeoDex SDK](https://github.com/NDesumeur/neodex-sdk).
+
+## My town
+
+Every wagon you catch is delivered to your town: wood, crates, coal, water, passengers or fruit, depending on the wagon. Game after game, these deliveries build twelve buildings along the track: the station, the sawmill, the houses, the market, the mine, the water tower, the hotel, the school, the mill, the factory, the fountain and the theatre. Each one needs an amount of one kind of goods. The “My town” card, below the song list, shows what is built and what is missing for the next one; the end screen says how many wagons you delivered and what was just built.
+
+## Seasons, tunnels, drawbridges and oncoming trains
+
+Each song has its season: spring (cherry blossoms, petals), summer, autumn (russet leaves, falling leaves) or winter (snow, frozen rivers, snowflakes). From Normal, the train goes through a tunnel for 4 bars every 24 bars: switches only show up at the last moment, so you play by ear (low notes left, high notes right). One golden track in two crosses a drawbridge: it only comes down if you hold the key. In Hard and Expert, a red train sometimes comes the other way on a side track: do not switch to that side (“AVOIDED” if you stay, “COLLISION” otherwise).

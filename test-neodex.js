@@ -22,10 +22,10 @@ module.exports = async ({ pj, sleep }) => {
   const tap = () => pj(`document.getElementById('gc').__rh.st().tap`);
   const t0 = await tap(); await pad(0, true); await pad(0, false); const t1 = await tap(); await sleep(150); await pad(14, true); await pad(14, false); const t2 = await tap();
   if (!(t1 > t0 && t2 > t1)) throw new Error('la manette devait frapper le temps : ' + [t0, t1, t2]);
-  await key('p'); await sleep(400);
+  await key('p'); for (let i = 0; i < 10 && !/: pause,/.test(await label()); i++) await sleep(200);
   if (!/: pause,/.test(await label())) throw new Error('P devait mettre en pause : « ' + await label() + ' »');
   // l'écran de fin et sa courbe de précision (une partie inventée : juste au début, des ratés au milieu)
-  await pj(`(() => { const T = document.getElementById('gc').__rh, rh = T.st(), L = rh.c.len, h = []; for (let i = 0; i < 200; i++) { const t = i / 200 * L, mid = t > L * .4 && t < L * .6; h.push([t, mid ? (i % 3 ? 1 : 0) : (i % 7 ? 3 : 2)]); } T.finish(h); return 0; })()`);
+  await pj(`(() => { const T = document.getElementById('gc').__rh, rh = T.st(), L = rh.c.len, h = []; window.__town0 = T.town()[0]; rh.del = [30, 0, 0, 0, 0, 0]; for (let i = 0; i < 200; i++) { const t = i / 200 * L, mid = t > L * .4 && t < L * .6; h.push([t, mid ? (i % 3 ? 1 : 0) : (i % 7 ? 3 : 2)]); } T.finish(h); return 0; })()`);
   await sleep(1200); await shot('2-fin');
   const end = await pj(`(() => { const rh = document.getElementById('gc').__rh.st(); return [rh.mode, rh.hist.length].join(','); })()`);
   if (end !== 'over,200') throw new Error('écran de fin attendu : ' + end);
@@ -35,5 +35,14 @@ module.exports = async ({ pj, sleep }) => {
     const set = [b.textContent, v.querySelector('.kbA').textContent]; v.getElementById('kbReset').click(); return [def, ...set, b.textContent].join(','); })()`);
   if (!/^(\w),X,X\/\w,\1$/.test(kb)) throw new Error('touches au choix : ' + kb);
   await pj("(document.querySelector('.kbRow').scrollIntoView({block: 'center'}), 0)"); await sleep(300); await shot('3-touches');
-  return l;
+  // la saison du morceau
+  const season = await pj(`document.getElementById('gc').__rh.season()`);
+  if (!['printemps', 'été', 'automne', 'hiver'].includes(season)) throw new Error('saison : ' + season);
+  for (const s of ['hiver', 'automne', 'printemps']) { await pj(`(document.getElementById('gc').__rh.st().season = '${s}', 0)`); await sleep(400); await shot('4-' + s); }
+  await pj(`(document.getElementById('gc').__rh.st().season = '${season}', 0)`);
+  // les wagons livrés vont à la ville
+  const town = await pj(`(() => { const s = document.getElementById('gc').__rh.town(); return (s[0] === window.__town0 + 30) + ',' + s[1]; })()`);
+  if (!/^true,\d+ wagons livrés · \d+ bâtiments sur 12/.test(town)) throw new Error('ma ville : ' + town);
+  await pj("(document.getElementById('agTown').scrollIntoView({block: 'center'}), 0)"); await sleep(300);
+  return l + ' · ma ville ok · saison ' + season;
 };

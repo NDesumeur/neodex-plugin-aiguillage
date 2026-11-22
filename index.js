@@ -10,10 +10,12 @@ const HTML = `<div class="appWrap wide">
       <div class="sysCard rhImport" id="rhImport" style="display:none"><div class="row"><button class="btn main" id="rhFileBtn">IMPORTER UN FICHIER AUDIO</button><input type="file" id="rhFile" accept="audio/*,.mp3,.m4a,.ogg,.opus,.wav,.flac,.webm" hidden></div><div class="row"><select class="f" id="rhMuList"></select><button class="btn" id="rhMuBtn">CRÉER LE NIVEAU</button></div><div class="row"><label>Difficulté <select class="f" id="rhStars"><option value="1">1 ★</option><option value="2">2 ★</option><option value="3" selected>3 ★</option><option value="4">4 ★</option><option value="5">5 ★</option><option value="6">6 ★</option><option value="7">7 ★</option><option value="8">8 ★</option><option value="9">9 ★</option><option value="10">10 ★</option></select></label></div><span class="hint" id="rhImpMsg">Un fichier ou une musique de NeoMusic : le jeu trouve son tempo et ses temps forts et en fait un niveau.</span></div>
       <div id="rhSongs"></div>
       <div class="sysCard rhOpts"><label>Volume <input type="range" id="rhVol" min="0" max="100" value="70"></label><label>Son des clics <select class="f gSel" id="rhClick"><option value="0" selected>Doux</option><option value="1">Clap</option><option value="2">Bois</option><option value="3">Grosse caisse</option><option value="4">Cristal</option><option value="5">Pop</option><option value="6">Charleston</option><option value="7">Caisse claire</option><option value="8">Pluck</option><option value="9">Tok</option><option value="-1">Aucun</option></select></label><label>Décalage <input type="number" class="f" id="rhOffset" min="-300" max="300" step="5" value="0" style="width:80px" title="Réglé tout seul après chaque partie"> ms</label><span class="kbRow">Touches <span class="kbG">Gauche <button class="btn kb" data-a="a" data-i="0"></button><button class="btn kb" data-a="a" data-i="1"></button></span><span class="kbG">Droite <button class="btn kb" data-a="b" data-i="0"></button><button class="btn kb" data-a="b" data-i="1"></button></span><button class="btn kb" id="kbReset">PAR DÉFAUT</button></span><span class="hint kbHint">Clique une case puis appuie sur la touche voulue (Échap : annuler). Les flèches et la manette marchent toujours.</span></div>
+      <div class="sysCard agTownCard"><b>MA VILLE</b><canvas id="agTown" width="320" height="128"></canvas><div class="hint" id="agTownN"></div></div>
       <div class="hint">Ton train roule à travers champs, forêts, villages et rivières. À chaque aiguillage, la flèche montre le côté du wagon ; l'autre voie finit sur un butoir rouge. Change l'aiguillage du bon côté pile quand la locomotive y arrive.</div><div class="hint">Chaque wagon pris allonge le train, une impasse le raccourcit. Voie de garage dorée : garde la touche jusqu'à ce qu'elle rejoigne la ligne. Croisement (panneau jaune) : les deux côtés presque ensemble.</div><div class="hint">La difficulté de chaque niveau est calculée sur ses notes (densité, passages chargés) : de 1★ à 10★.</div>
     </div></div>
 </div>`;
-const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+const CSS = `#agTown{width:100%;max-width:640px;image-rendering:pixelated;display:block;margin:6px 0;border-radius:4px}
+.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
 .gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:2;min-width:320px;position:relative}
 .gameBox canvas{width:100%;image-rendering:pixelated;cursor:var(--cp,pointer);touch-action:none}
 .gSide{display:flex;flex-direction:column;gap:14px;flex:1;min-width:250px;max-width:420px}
@@ -944,7 +946,7 @@ function rhCheckEnd(now) {
   rh.acc = acc; rh.grade = acc >= .95 ? 'S' : acc >= .9 ? 'A' : acc >= .8 ? 'B' : acc >= .7 ? 'C' : 'D';
   const k = rh.info.key, res = gstore('rhythm', {}); rh.record = best(k, rh.score);
   if (rh.record || !res[k]) res[k] = {score: rh.score, acc: Math.round(acc * 1000) / 10, grade: rh.grade, combo: rh.maxCombo};
-  rh.adj = rhAutoOffset(rh.dts); saveGames(); sfx('SAB'.includes(rh.grade) ? 'launch' : 'notify'); rhList(); rhInfo();
+  rh.adj = rhAutoOffset(rh.dts); RHG.over?.(); saveGames(); sfx('SAB'.includes(rh.grade) ? 'launch' : 'notify'); rhList(); rhInfo();
   return true;
 }
 function rhOffsetStep(dts) {  // décalage automatique : si tu tapes en moyenne en retard (ou en avance), on corrige de 70 % de l'écart
@@ -1066,6 +1068,7 @@ $('gNew').onclick = () => { if (rh) rhSelect(rh.song, rh.diff); $('gNew').blur()
 function rhInfo() { const res = games.rhythm || {}, all = Object.values(res); showStats([['Morceaux joués', all.length], ['Notes S', all.filter(r => r.grade === 'S').length], ['Meilleur combo', all.reduce((m, r) => Math.max(m, r.combo || 0), 0)]]); }
 function rhOpen() {
   const p = games.rhythmPrefs || {}; for (const id of ['rhVol', 'rhClick', 'rhOffset']) if (p[id] != null) $(id).value = p[id];
+  agTownDraw();
   rhOffMs = +$('rhOffset').value; kbLoad(p.keys); rhInfo();
   if (rh) { rhList(); return gameLoop(rh, RHG.key, RHG.update, rhDrawAll); }
   const last = games.rhythmLast || {song: 0, diff: 'normal'}; rhSelect(last.song, last.diff).catch(() => rhSelect(0, 'normal'));
@@ -1084,7 +1087,7 @@ const RHG = {key: 'aiguillage', factor: 1.05, color: '#ffd84a',
   help: [['← ou D/F : à gauche · → ou J/K : à droite', '#fff4c8'], ['Prends la voie du wagon, pas celle de l\'impasse', '#e8e0ff'], ['Voie dorée : tiens la touche · croisement : les deux côtés', '#e8e0ff']],
   // les notes ensemble n'en font qu'une, trop rapprochées : retirées ; le côté vient de la piste de la note (graves à gauche, aigus à droite),
   // jamais plus de 5 fois de suite le même côté. Une note longue : une voie de garage à tenir ; un accent isolé : un croisement (les deux côtés)
-  chart(base, c) {
+  chart(base, c, d = 'normal') {
     const beat = (c.step || .125) * 4, out = []; let run = 0;
     for (const n of base) {
       const p = out.at(-1); if (p && n.t - p.t < AG.MIN * beat - 1e-6) continue;
@@ -1098,10 +1101,14 @@ const RHG = {key: 'aiguillage', factor: 1.05, color: '#ffd84a',
       n.both = !n.len && n.acc > .85 && prev >= beat * .75 && gap >= beat * .75 && i % 2 === 0;
       if (n.both) n.side = 0;
       delete n.acc;
+      const k = Math.floor(n.t / (4 * beat)); if (d !== 'facile' && k >= 16 && (k - 16) % 24 < 4) n.tun = true;  // dans un tunnel : on joue à l'oreille
+      if ((d === 'difficile' || d === 'expert') && !n.len && !n.both && !n.tun && i % 10 === 5 && prev >= beat * .75) n.avoid = true;  // un train arrive en face : ne pas aiguiller
+      if (n.len && i % 2 === 0) n.bridge = true;  // la voie de garage passe sur un pont-levis
     });
     return out;
   },
-  reset() { Object.assign(rh, {judge: null, tap: -99, tapSide: 0, shake: 0, wagons: 1, puffs: [], held: null, keysDown: new Set(), cargos: [0]}); },
+  reset() { Object.assign(rh, {judge: null, tap: -99, tapSide: 0, shake: 0, wagons: 1, puffs: [], held: null, keysDown: new Set(), cargos: [0], del: [0, 0, 0, 0, 0, 0], newB: [], nextB: null, season: agSeason(rh.info?.name), tuns: rh.notes.some(n => n.tun) ? agTunnels(rh.c, rh.diff) : []}); },
+  over() { agTownAdd(); },
   update() { agStep(rhNow()); },
   draw() { agDraw(); },
 };
@@ -1109,6 +1116,7 @@ function agStep(now) {
   for (const n of rh.notes) {
     if (n.judged) continue; if (n.t - now > .2) break;
     if (n.first) { if (now - n.first.at > .12) { rhMissed(n); agFx(n, null, 'CROISEMENT'); } continue; }
+    if (n.avoid && now - n.t > RH.WIN.at(-1)[0]) { rhHit(n, 0); n.ok = false; rh.judge = {text: 'ÉVITÉ', col: '#7ee07a', t: 24}; continue; }
     if (now - n.t > RH.WIN.at(-1)[0]) { rhMissed(n); agFx(n, null); }
   }
   const h = rh.held;  // la voie de garage : la touche tenue jusqu'à ce qu'elle rejoigne la ligne
@@ -1131,10 +1139,118 @@ function agX(t) {
   }
   return 0;
 }
+/* ---------- 1.1.0 : les wagons livrés bâtissent ta ville, partie après partie ---------- */
+const AG_GOODS = ['bois', 'caisses', 'charbon', 'eau', 'voyageurs', 'fruits'];  // ce que livre chaque sorte de wagon (même ordre que AG_CARGO)
+// les bâtiments : c, la marchandise qu'il faut (-1 : tous les wagons) ; need, combien en tout depuis le début
+const AG_TOWN = [
+  {n: 'La gare', c: -1, need: 25, wall: '#d8c8a8', roof: '#a8402a', k: 'gare'}, {n: 'La scierie', c: 0, need: 30, wall: '#8a5a30', roof: '#5a3a20', k: 'scierie'},
+  {n: 'Les maisons', c: 1, need: 30, wall: '#e8d8b8', roof: '#c85a3a', k: 'maisons'}, {n: 'Le marché', c: 5, need: 40, wall: '#e8e0d0', roof: '#ff6a5a', k: 'marche'},
+  {n: 'La mine', c: 2, need: 40, wall: '#6a6a72', roof: '#3a3a42', k: 'mine'}, {n: "Le château d'eau", c: 3, need: 40, wall: '#a8b0c0', roof: '#5a7aa8', k: 'tour'},
+  {n: "L'hôtel", c: 4, need: 50, wall: '#e8c8a8', roof: '#6a4a8a', k: 'grand'}, {n: "L'école", c: 1, need: 100, wall: '#f0e8d8', roof: '#3a6aa8', k: 'ecole'},
+  {n: 'Le moulin', c: 5, need: 100, wall: '#e8e0c8', roof: '#8a5a2a', k: 'moulin'}, {n: "L'usine", c: 2, need: 120, wall: '#8a4a3a', roof: '#4a4a52', k: 'usine'},
+  {n: 'La fontaine', c: 3, need: 120, wall: '#c8ccd8', roof: '#4ac8f0', k: 'fontaine'}, {n: 'Le théâtre', c: 4, need: 150, wall: '#f0d8a8', roof: '#a8202a', k: 'grand'},
+];
+const agHave = (T, B) => B.c < 0 ? T.reduce((a, b) => a + b, 0) : T[B.c] || 0;
+const agBuilt = T => AG_TOWN.filter(B => agHave(T, B) >= B.need);
+const agNext = T => AG_TOWN.find(B => agHave(T, B) < B.need);
+function agHouse(b, x, y, w, h, wall, roof) {  // une maison : l'ombre, le mur, deux fenêtres, la porte, un toit en escalier
+  const L = Math.round(x - w / 2); px(b, '#1e3a14', L + 2, y - h + 2, w, h); px(b, wall, L, y - h, w, h); px(b, agMix(wall, '#000000', .2), L, y - 2, w, 2);
+  for (let k = 0; k < 6; k++) px(b, k % 2 ? roof : agMix(roof, '#000000', .25), L - 2 + k, y - h - 6 + k, w + 4 - 2 * k, 1);
+  for (const fx of [L + 3, L + w - 7]) if (w > 14) { px(b, '#3a2a1a', fx, y - h + 4, 4, 4); px(b, '#ffe8a8', fx + 1, y - h + 5, 2, 2); }
+  px(b, '#5a3a20', Math.round(x) - 2, y - 7, 5, 7);
+}
+function agBuild(b, x, y, B) {  // un bâtiment de la ville, x et y : le milieu de son pied
+  const D = agMix(B.wall, '#000000', .3);
+  if (B.k === 'maisons') { agHouse(b, x - 13, y, 14, 12, B.wall, B.roof); agHouse(b, x + 13, y, 14, 12, '#d8e0c8', '#8a5a2a'); agHouse(b, x, y + 1, 16, 15, B.wall, '#6a4a8a'); return; }
+  if (B.k === 'marche') { for (const [dx, c] of [[-13, B.roof], [0, '#ffd84a'], [13, '#7ab0ff']]) { px(b, '#5a3a20', x + dx - 5, y - 8, 1, 8); px(b, '#5a3a20', x + dx + 5, y - 8, 1, 8); for (let k = 0; k < 11; k++) px(b, k % 2 ? c : '#ffffff', x + dx - 5 + k, y - 13, 1, 5); px(b, '#c8a86a', x + dx - 4, y - 4, 9, 3); for (let k = 0; k < 4; k++) px(b, ['#ff5a4a', '#7ee07a', '#ff9a3a', '#ffd84a'][k], x + dx - 3 + k * 2, y - 5, 1, 1); } return; }
+  if (B.k === 'tour') { for (const dx of [-7, 6]) px(b, '#5a5a62', x + dx, y - 16, 2, 16); px(b, '#5a5a62', x - 7, y - 9, 15, 1); px(b, '#1e3a14', x - 8, y - 27, 19, 12); px(b, B.wall, x - 9, y - 29, 18, 12); px(b, '#e8f0ff', x - 9, y - 29, 18, 2); px(b, B.roof, x - 7, y - 32, 14, 3); px(b, D, x - 9, y - 19, 18, 2); return; }
+  if (B.k === 'fontaine') { px(b, '#8a8e9a', x - 12, y - 6, 25, 6); px(b, B.wall, x - 11, y - 7, 23, 2); px(b, '#3a7ab0', x - 10, y - 5, 21, 3); px(b, B.wall, x - 2, y - 14, 5, 9); for (let k = 0; k < 5; k++) px(b, '#a8e8ff', x - 6 + k * 3, y - 16 + Math.abs(k - 2) * 2, 1, 2); px(b, '#ffffff', x, y - 17, 1, 2); return; }
+  const w = B.k === 'grand' || B.k === 'usine' || B.k === 'gare' ? 40 : 28, h = B.k === 'grand' ? 22 : 16;
+  agHouse(b, x, y, w, h, B.wall, B.roof);
+  if (B.k === 'grand') for (let k = 0; k < 4; k++) { px(b, '#3a2a1a', x - 16 + k * 9, y - 12, 4, 4); px(b, '#ffe8a8', x - 15 + k * 9, y - 11, 2, 2); }
+  if (B.k === 'gare') { px(b, '#ffffff', x - 2, y - h - 4, 5, 5); px(b, '#2a2a30', x, y - h - 3, 1, 2); px(b, '#8a8270', x - 22, y, 44, 2); }  // l'horloge, le quai
+  if (B.k === 'scierie') for (let k = 0; k < 3; k++) { px(b, '#a8743a', x + 15, y - 3 - k * 3, 10, 2); px(b, '#d8a868', x + 15, y - 3 - k * 3, 2, 2); }  // le tas de rondins
+  if (B.k === 'mine') { px(b, '#0a0a0e', x - 4, y - 9, 9, 9); px(b, '#5a3a20', x - 5, y - 10, 11, 1); px(b, '#4a4a52', x + 16, y - 5, 8, 4); px(b, '#1a1a1e', x + 17, y - 6, 6, 2); }  // l'entrée, le wagonnet
+  if (B.k === 'ecole') { px(b, B.wall, x - 3, y - h - 14, 7, 9); px(b, B.roof, x - 4, y - h - 16, 9, 2); px(b, '#ffd84a', x - 1, y - h - 12, 3, 3); }  // le clocheton
+  if (B.k === 'moulin') for (let k = 0; k < 9; k++) { px(b, '#d8d0b8', x - 8 + k * 2, y - h - 12 + k * 2, 2, 2); px(b, '#d8d0b8', x + 8 - k * 2, y - h - 12 + k * 2, 2, 2); }  // les ailes
+  if (B.k === 'usine') { px(b, '#4a2a22', x + 12, y - h - 18, 5, 18); for (let k = 0; k < 3; k++) px(b, '#c8c8d0', x + 13 + k * 3, y - h - 22 - k * 3, 4, 3); }  // la cheminée, sa fumée
+}
+function agTownDraw() {  // « Ma ville » : douze places sur deux rangées, le long de la voie ; les places encore vides montrent ce qu'il manque
+  const c = $('agTown'); if (!c) return; const b = c.getContext('2d'), T = games.aiguillageTown || [0, 0, 0, 0, 0, 0];
+  px(b, '#3a6e2e', 0, 0, c.width, c.height); for (let i = 0; i < 90; i++) px(b, i % 2 ? '#4e8a42' : '#2e5a26', (i * 97) % c.width, (i * 53) % c.height, 2, 1);
+  px(b, '#8a8270', 0, 62, c.width, 6); for (let x = 0; x < c.width; x += 6) px(b, '#3a2414', x, 63, 3, 4); px(b, '#c8ccd8', 0, 63, c.width, 1); px(b, '#c8ccd8', 0, 66, c.width, 1);  // la voie
+  AG_TOWN.forEach((B, i) => {
+    const x = 27 + (i % 6) * 53, y = i < 6 ? 56 : 120, have = agHave(T, B);
+    if (have >= B.need) return agBuild(b, x, y, B);
+    for (let k = 0; k < 30; k += 2) { px(b, '#a8c898', x - 15 + k, y - 1, 1, 1); px(b, '#a8c898', x - 15 + k, y - 21, 1, 1); } for (let k = 0; k < 20; k += 2) { px(b, '#a8c898', x - 15, y - 21 + k, 1, 1); px(b, '#a8c898', x + 14, y - 21 + k, 1, 1); }
+    px(b, '#1e3a14', x - 12, y - 8, 24, 3); px(b, '#ffd84a', x - 12, y - 8, Math.round(24 * have / B.need), 3);
+  });
+  const nx = agNext(T), tot = T.reduce((a, b) => a + b, 0);
+  $('agTownN').textContent = tot + ' wagons livrés · ' + agBuilt(T).length + ' bâtiments sur 12' + (nx ? ' · prochain : ' + nx.n + ' (' + (nx.c < 0 ? 'wagons' : AG_GOODS[nx.c]) + ' ' + agHave(T, nx) + '/' + nx.need + ')' : ' · ta ville est finie !');
+}
+function agTownAdd() {  // la fin du morceau : les wagons livrés vont à la ville
+  const T = gstore('aiguillageTown', [0, 0, 0, 0, 0, 0]), was = agBuilt(T).length;
+  rh.del.forEach((v, i) => { T[i] = (T[i] || 0) + v; });
+  rh.newB = agBuilt(T).slice(was).map(B => B.n); rh.nextB = agNext(T); rh.town = T.slice(); agTownDraw();
+}
+{ const T = [10, 30, 0, 0, 0, 0]; console.assert(agBuilt(T).map(B => B.n).join() === 'La gare,Les maisons' && agNext(T).n === 'La scierie' && AG_TOWN.length === 12, 'agBuilt'); }
+/* ---------- 1.1.0 : les saisons, les tunnels, les ponts-levis, les trains en face ---------- */
+const AG_SEASONS = ['printemps', 'été', 'automne', 'hiver'];
+const agSeason = name => AG_SEASONS[[...(name || '')].reduce((a, c) => a + c.charCodeAt(0), 0) % 4];
+function agRecolor(src, season) {  // la même tranche de paysage, aux couleurs de la saison
+  if (season === 'été') return src;
+  return cnv(src.width, src.height, b => {
+    b.drawImage(src, 0, 0); const im = b.getImageData(0, 0, src.width, src.height), D = im.data;
+    for (let i = 0; i < D.length; i += 4) {
+      const r = D[i], g2 = D[i + 1], bl = D[i + 2], green = g2 > r + 8 && g2 > bl, water = bl > r + 20 && bl > g2;
+      if (season === 'automne' && green) { const h = ((i >> 2) * 2654435761 >>> 0) % 7; D[i] = Math.min(255, g2 * 1.25 + 30 + h * 3); D[i + 1] = g2 * .72 + h * 2; D[i + 2] = bl * .45; }
+      if (season === 'hiver') { if (green) { const L = (r + g2 + bl) / 3; D[i] = 196 + L * .22; D[i + 1] = 206 + L * .2; D[i + 2] = 222 + L * .13; } else if (water) { D[i] = Math.min(255, r + 110); D[i + 1] = Math.min(255, g2 + 100); D[i + 2] = Math.min(255, bl + 50); } }
+      if (season === 'printemps' && green && g2 < 120 && ((i >> 2) * 2246822519 >>> 0) % 23 === 0) { D[i] = 255; D[i + 1] = 154; D[i + 2] = 216; }  // des fleurs de cerisier dans les arbres et les prés
+    }
+    b.putImageData(im, 0, 0);
+  });
+}
+const AG_LANDS = {};
+const agLands = s => AG_LANDS[s] ??= AG_LAND.map(c => agRecolor(c, s));
+function agSeasonFx(s) {  // ce qui tombe du ciel : pétales, feuilles, flocons (rien l'été)
+  if (s === 'été') return; const t = rh.tick, col = s === 'hiver' ? ['#ffffff', '#d8e4f8'] : s === 'automne' ? ['#e8782a', '#c8501a'] : ['#ffb0d8', '#ffffff'];
+  for (let i = 0; i < (s === 'hiver' ? 40 : 18); i++) { const x = ((i * 53 + Math.sin(t / 30 + i) * 12 + t * (s === 'automne' ? .4 : .15)) % W + W) % W, y = (t * (.5 + (i % 4) * .2) + i * 61) % (H + 10) - 5;
+    px(g, col[i % 2], x, y, s === 'automne' ? 2 : 1 + (i % 3 === 0), s === 'automne' ? 1 + ((t >> 3) + i) % 2 : 1 + (i % 3 === 0)); }
+}
+function agTunnels(c, d) {  // les tunnels : 4 mesures toutes les 24 mesures (à partir de la 17e), dès Normal
+  if (d === 'facile') return []; const bar = (c.step || .125) * 16, L = [];
+  for (let j = 0; (16 + 24 * j) * bar < c.len; j++) L.push([(16 + 24 * j) * bar, (20 + 24 * j) * bar]);
+  return L;
+}
+function agTunnelDraw(Y, sh) {  // la montagne cache la voie : un portail de pierre à l'entrée et à la sortie, des lampes aux murs
+  for (const [a, b] of rh.tuns) {
+    const ya = Math.round(Y(a)), yb = Math.round(Y(b)); if (ya < -20 || yb > H + 20) continue;
+    const top = Math.max(0, yb), bot = Math.min(H, ya);
+    if (bot > top) { px(g, '#0e0a08', 0, top, W, bot - top); for (const o of [-4, 4]) px(g, '#2a2a32', AG.X + o + sh, top, 1, bot - top);
+      for (let y = yb + 12; y < ya - 6; y += 40) if (y > -4 && y < H) for (const x of [AG.X - 26, AG.X + 26]) { px(g, '#3a2a14', x + sh - 1, y, 3, 3); px(g, '#ffc860', x + sh, y + 1, 1, 1); g.globalAlpha = .15; px(g, '#ffc860', x + sh - 6, y - 5, 13, 13); g.globalAlpha = 1; } }
+    for (const [y, dir] of [[ya, 1], [yb, -1]]) { if (y < -16 || y > H + 16) continue;  // le portail : des pierres en arc autour de l'ouverture
+      px(g, '#3a342c', 0, y - (dir > 0 ? 0 : 10), W, 10); for (let x = 0; x < W; x += 12) px(g, '#5a5248', x + ((y >> 2) % 2) * 6, y - (dir > 0 ? 0 : 10) + 1, 10, 4);
+      px(g, '#0e0a08', AG.X - 16 + sh, y - (dir > 0 ? 0 : 10), 33, 10); for (let k = 0; k < 6; k++) px(g, '#6a6258', AG.X - 18 + k * 7 + sh, y - (dir > 0 ? 0 : 10) + (dir > 0 ? 8 : 0), 5, 2); }
+  }
+}
+function agBridge(cx, cy, down, sh) {  // le pont-levis : la rivière en travers, le tablier baissé (on peut passer) ou levé
+  px(g, '#1a4a8a', 0, cy - 7, W, 14); for (let x = (rh.tick % 16); x < W; x += 16) px(g, '#5a9ad8', x, cy - 4 + ((x >> 4) % 2) * 6, 6, 1);
+  px(g, '#c8b888', 0, cy - 8, W, 1); px(g, '#c8b888', 0, cy + 7, W, 1);
+  if (down) { px(g, '#4a2a14', cx - 11, cy - 9, 23, 18); for (let y = cy - 8; y < cy + 9; y += 3) px(g, '#8a5a30', cx - 10, y, 21, 2); }
+  else for (const s of [-1, 1]) { px(g, '#4a2a14', cx + s * 12 - 2, cy - 14, 5, 12); px(g, '#8a5a30', cx + s * 12 - 1, cy - 14, 3, 11); }
+  for (const s of [-1, 1]) { px(g, '#2a2a30', cx + s * 15 - 1, cy - 12, 3, 24); px(g, '#c83a2a', cx + s * 15 - 1, cy - 13, 3, 2); }  // les deux tours et leurs feux
+}
+function agOncoming(x, y) {  // le train qui arrive en face, phares allumés
+  x = Math.round(x); y = Math.round(y);
+  px(g, '#08080c', x - 9, y - 18, 19, 36); px(g, '#7a1a14', x - 8, y - 17, 17, 34); px(g, '#a82a1a', x - 8, y - 17, 17, 3); px(g, '#c8461a', x - 8, y + 12, 17, 4);
+  px(g, '#fff8c8', x - 6, y + 13, 3, 2); px(g, '#fff8c8', x + 4, y + 13, 3, 2); px(g, '#1a1a22', x - 4, y - 12, 9, 16); px(g, '#8ac8ff', x - 3, y - 2, 7, 3);
+  g.globalAlpha = .18 + (rh.tick % 10 < 5 ? .08 : 0); px(g, '#fff4b0', x - 10, y + 16, 21, 14); g.globalAlpha = 1;
+}
+{ const T = agTunnels({len: 300, step: .125}, 'normal'); console.assert(T.length === 6 && T[1][0] === 80 && T[0][0] === 32 && T[0][1] === 40 && !agTunnels({len: 300, step: .125}, 'facile').length && AG_SEASONS.includes(agSeason('Ode')), 'agTunnels'); }
 function agFx(n, w, text) {
   rh.judge = {text: w ? w[1] : text || 'RATÉ', col: w ? w[3] : '#ff6a5a', t: 26};
   if (!w) { if (rh.wagons > 1) { rh.wagons--; rh.cargos.pop(); } if (text) rh.shake = 10; return; }
-  if (rh.wagons < 12) { rh.wagons++; rh.cargos.push(n.cargo); }
+  rh.del[n.cargo]++; if (rh.wagons < 12) { rh.wagons++; rh.cargos.push(n.cargo); }
   for (let i = 0; i < 12; i++) { const a = Math.random() * Math.PI * 2, v = .6 + Math.random() * 1.6; rh.sparks.push({x: AG.X + (n.side || 0) * AG.SIDE, y: AG.Y - 4, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 20, col: i % 2 ? '#ffd84a' : '#fff4c8'}); }
 }
 function agHit(side, now = rhNow()) {
@@ -1142,6 +1258,7 @@ function agHit(side, now = rhNow()) {
   let near = null;
   for (const n of rh.notes) { if (n.judged) continue; if (n.t - now > .2) break; if (Math.abs(n.t - now) <= RH.WIN.at(-1)[0] && (!near || Math.abs(n.t - now) < Math.abs(near.t - now))) near = n; }
   if (!near) return;
+  if (near.avoid) { if (side === near.side) { rhMissed(near); near.wrong = true; agFx(near, null, 'COLLISION'); } return; }
   if (near.both) {  // un croisement : les deux côtés en moins de 120 ms, jugé sur le premier
     if (!near.first) { near.first = {side, at: now, dt: now - near.t}; return; }
     if (side === near.first.side) return;
@@ -1199,7 +1316,7 @@ function agDraw() {
   const now = rhNow(), cam = now * AG.V, sh = rh.shake ? (rh.shake % 2 ? 2 : -2) : 0, Y = t => AG.Y - (t * AG.V - cam);
   // le paysage : une tranche par 256 pixels, choisie selon son numéro (le même trajet à chaque partie du morceau)
   const c0 = Math.floor(cam / 256), oy = Math.round(cam - c0 * 256);
-  for (let k = -1; k <= 1; k++) { const ci = c0 + k, land = AG_LAND[(((ci >> 1) % 4) + 4) % 4]; g.drawImage(land, sh, oy - 256 * k); }
+  for (let k = -1; k <= 1; k++) { const ci = c0 + k, land = agLands(rh.season || 'été')[(((ci >> 1) % 4) + 4) % 4]; g.drawImage(land, sh, oy - 256 * k); }
   // la voie du milieu : traverses qui défilent, deux rails ombrés ; des poteaux télégraphiques et leur fil
   for (let y = (Math.round(cam) % 10) - 10; y < H; y += 10) { px(g, '#3a2414', AG.X - 8 + sh, y, 17, 3); px(g, '#5a3a20', AG.X - 8 + sh, y, 17, 1); }
   for (const o of [-4, 4]) { px(g, '#2a2a30', AG.X + o + 1 + sh, 0, 1, H); px(g, '#c8c8d8', AG.X + o + sh, 0, 1, H); }
@@ -1215,20 +1332,25 @@ function agDraw() {
         for (const s of [-1, 1]) for (let k = 0; k < 5; k++) px(g, '#fff4c8', AG.X + sh + s * (14 + k), y0 - 2 - (4 - k), 1, 2 * (4 - k) + 1); }
       continue;
     }
+    if (n.tun && !n.judged && y0 < AG.Y - 30) continue;  // dans le tunnel, rien ne se voit avant d'y être
     const D = n.d * AG.V, L = (n.broken ? 0 : n.len) * AG.V, total = 2 * D + L;
     const at = (s, v) => { const x = v < D ? Math.sin(Math.PI / 2 * v / D) : v < D + L ? 1 : Math.cos(Math.PI / 2 * (v - D - L) / D); return [AG.X + sh + s * AG.SIDE * Math.max(0, x), y0 - v]; };
     const steps = Math.max(12, Math.ceil(total / 6)), good = Array.from({length: steps + 1}, (_, k) => at(n.side, k / steps * total)).reverse(), bad = Array.from({length: 7}, (_, k) => at(-n.side, k / 12 * 2 * D)).reverse();
+    if (n.avoid) { agRail(good, '#c88a8a', true); if (!n.wrong) { const [ox, oy] = at(n.side, D + Math.max(0, (now - n.t) * AG.V * 1.6)); agOncoming(ox, oy - 10); } continue; }
+    if (n.bridge) { const [qx, qy] = at(n.side, D + L / 2); agBridge(qx, qy, n.ok && !n.broken, sh); }
     agRail(good, n.len ? '#ffd84a' : '#c8c8d8', true); agRail(bad, '#8a8a98', true);
     const [bx, by] = at(-n.side, D); px(g, '#2a0a0a', bx - 8, by - 3, 17, 6); px(g, '#c83a2a', bx - 7, by - 3, 15, 4); px(g, '#ffffff', bx - 5, by - 2, 2, 1); px(g, '#ffffff', bx + 4, by - 2, 2, 1);  // le butoir
     if (!n.judged || !n.ok) { const [cx, cy] = at(n.side, D + L / 2); agWagon(cx, cy, n.cargo); }  // le wagon à prendre
     if (!n.judged && y0 > 0 && y0 < AG.Y + 4) { const ax = AG.X + sh + n.side * 14, f = n.side; for (let k = 0; k < 5; k++) px(g, '#fff4c8', ax + f * k - (f > 0 ? 0 : 1), y0 - 2 - (4 - k), 1, 2 * (4 - k) + 1); }  // la flèche de l'aiguillage
   }
+  agTunnelDraw(Y, sh);
   // la fumée, puis le train : la locomotive et ses wagons (ceux pris en route), qui suivent la voie avec un peu de retard
   for (const p of rh.puffs) { g.globalAlpha = p.life / 70; const s = Math.round(p.r * 2); px(g, '#e8e8f0', AG.X + p.x + sh - s / 2 + Math.sin(p.life / 6) * 2, AG.Y - 14 + p.y - s / 2, s, s); g.globalAlpha = 1; }
   for (let k = Math.min(rh.wagons, 12) - 1; k >= 1; k--) { const y = AG.Y + 18 + k * 17; if (y > H + 10) continue; agWagon(AG.X + agX(now - (18 + k * 17) / AG.V) + sh, y, rh.cargos[k] ?? k); }
   agLoco(AG.X + agX(now) + sh, AG.Y);
   for (const s of rh.sparks) { g.globalAlpha = s.life / 20; px(g, s.col, s.x + sh, s.y, 2, 2); g.globalAlpha = 1; }
   if (rh.tick - rh.tap < 6 && rh.mode === 'play') { const f = rh.tapSide || 1, ax = AG.X + sh + f * 40; for (let k = 0; k < 6; k++) px(g, '#fff4c8', ax + f * k, AG.Y - 5 + k, 1, 11 - 2 * k); }  // le côté choisi
+  agSeasonFx(rh.season || 'été');
   if (rh.judge && rh.mode === 'play') pxFont(g, rh.judge.text, AG.X, AG.Y - 34, rh.judge.col, 7, 'center');
   if (rh.mode !== 'ready' && rh.mode !== 'load') {
     rhProgress(now, '#ffd84a'); pxFont(g, String(rh.score).padStart(7, '0'), 4, 14, '#ffffff', 7);
@@ -1238,6 +1360,9 @@ function agDraw() {
   }
   if (rh.mode === 'play' && now < 0) pxFont(g, String(Math.ceil(-now)), W / 2, 60, '#ffd84a', 16, 'center');
   rhScreens(60);
+  if (rh.mode === 'over' && rh.tick - rh.overAt > 20) { const tot = rh.del.reduce((a, b) => a + b, 0), nb = rh.newB.at(-1), nx = rh.nextB;
+    g.fillStyle = 'rgba(10,20,8,.85)'; g.fillRect(W / 2 - 100, 190, 200, 30); pxFont(g, tot + ' WAGONS LIVRÉS À TA VILLE', W / 2, 200, '#e8f4d8', 6, 'center');
+    pxFont(g, nb ? 'NOUVEAU : ' + nb.toUpperCase() + ' !' : nx ? 'PROCHAIN : ' + nx.n.toUpperCase() + ' ' + agHave(rh.town, nx) + '/' + nx.need : 'TA VILLE EST FINIE !', W / 2, 212, nb ? '#ffd84a' : '#a8c898', 6, 'center'); }
   if (rh.tick % 15 === 0) cv.setAttribute('aria-label', 'Aiguillage, ' + (rh.info?.name || '') + ' : ' + ({ready: 'prêt', load: 'chargement', play: 'en jeu', pause: 'pause', over: 'fini'}[rh.mode] || rh.mode) + ', score ' + rh.score + ', combo ' + rh.combo + ', ' +
     Object.entries(rh.counts).map(([k, v]) => k.toLowerCase() + ' ' + v).join(', ') + ', ' + rh.wagons + ' wagons.');
 }
@@ -1277,7 +1402,9 @@ document.addEventListener('keydown', e => {
   if (k === ' ' || k === 'Enter') { e.preventDefault(); if (!e.repeat) rhPress(); }
 });
 document.addEventListener('keyup', e => { if (!rh) return; rh.keysDown?.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key === ' ' && keyOk(e)) e.preventDefault(); });
-cv.__rh = {st: () => rh, finish: hist => { rh.hist = hist; rh.mode = 'play'; rhCheckEnd(1e9); }};  // pour le test « local »
+{ const c = rhCompose(RH_SONGS[3]), x = RHG.chart(rhChart(c, 'expert'), c, 'expert'), e = RHG.chart(rhChart(c, 'facile'), c, 'facile'), bar = (c.step || .125) * 16;
+  console.assert(x.some(n => n.avoid) && (c.len < 21 * bar || x.some(n => n.tun)) && !e.some(n => n.tun || n.avoid) && !x.some(n => n.avoid && (n.len || n.both)), 'aiguillage tunnels et trains'); }
+cv.__rh = {season: () => rh.season, town: () => [(games.aiguillageTown || []).reduce((a, b) => a + b, 0), $('agTownN').textContent], st: () => rh, finish: hist => { rh.hist = hist; rh.mode = 'play'; rhCheckEnd(1e9); }};  // pour le test « local »
 {  // la manette : la croix et les boutons de gauche (X, A, gâchette gauche) à gauche, ceux de droite (B, Y, gâchette droite) à droite, Start lance, Select met en pause
   const KEY = {14: 'ArrowLeft', 15: 'ArrowRight', 2: 'ArrowLeft', 0: 'ArrowLeft', 4: 'ArrowLeft', 1: 'ArrowRight', 3: 'ArrowRight', 5: 'ArrowRight', 9: ' ', 8: 'p'}, held = new Set();
   const send = (k, type) => document.dispatchEvent(new KeyboardEvent(type, {key: k, bubbles: true}));
