@@ -14,6 +14,10 @@ module.exports = async ({ pj, sleep }) => {
   const judged = l => { const m = /: en jeu, score (\d+), combo \d+, parfait (\d+), bien (\d+), ok (\d+), raté (\d+)/.exec(l); return m ? +m[2] + +m[3] + +m[4] + +m[5] : 0; };
   for (let i = 0; i < 80 && judged(await label()) < 3; i++) { await key(i % 2 ? 'f' : 'j'); await sleep(300); }  // le morceau lent commence par une intro sans notes
   await shot('1-partie');
+  // dans un tunnel, le bandeau dit quoi faire (un tunnel inventé, sur tout le morceau, le temps d'une image)
+  await pj(`(() => { const rh = document.getElementById('gc').__rh.st(); window.__tuns = rh.tuns; rh.tuns = [[-1e9, 1e9]]; return 0; })()`); await sleep(300); await shot('1-tunnel');
+  const tunErr = await pj(`window.__e.join(' | ')`); await pj(`(document.getElementById('gc').__rh.st().tuns = window.__tuns, 0)`);
+  if (tunErr) throw new Error('erreur dans le tunnel : ' + tunErr);
   const l = await label(), m = /: en jeu, score (\d+), combo \d+, parfait (\d+), bien (\d+), ok (\d+), raté (\d+)/.exec(l);
   if (!m || +m[2] + +m[3] + +m[4] + +m[5] < 3) throw new Error('la partie devait avancer et des notes être jugées : « ' + l + ' »');
   // la manette : une fausse manette ; A puis la croix frappent le temps

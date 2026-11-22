@@ -435,5 +435,9 @@
  "printemps": "spring",
  "automne": "autumn",
  "hiver": "winter",
- "aiguillage tunnels et trains": "aiguillage tunnels and trains"
+ "aiguillage tunnels et trains": "aiguillage tunnels and trains",
+ "TUNNEL DEVANT !": "TUNNEL AHEAD!",
+ "La voie y est cachée : garde le rythme de la musique": "The track is hidden in there: keep to the beat of the music",
+ "DANS LE TUNNEL": "IN THE TUNNEL",
+ "Appuie du côté de la flèche quand elle s’allume": "Press on the side of the arrow when it lights up"
 }

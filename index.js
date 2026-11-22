@@ -1332,7 +1332,7 @@ function agDraw() {
         for (const s of [-1, 1]) for (let k = 0; k < 5; k++) px(g, '#fff4c8', AG.X + sh + s * (14 + k), y0 - 2 - (4 - k), 1, 2 * (4 - k) + 1); }
       continue;
     }
-    if (n.tun && !n.judged && y0 < AG.Y - 30) continue;  // dans le tunnel, rien ne se voit avant d'y être
+    if (n.tun && !n.judged && y0 < AG.Y - 60) continue;  // dans le tunnel, l'aiguillage ne s'éclaire qu'au dernier moment (un peu plus d'une demi-seconde avant)
     const D = n.d * AG.V, L = (n.broken ? 0 : n.len) * AG.V, total = 2 * D + L;
     const at = (s, v) => { const x = v < D ? Math.sin(Math.PI / 2 * v / D) : v < D + L ? 1 : Math.cos(Math.PI / 2 * (v - D - L) / D); return [AG.X + sh + s * AG.SIDE * Math.max(0, x), y0 - v]; };
     const steps = Math.max(12, Math.ceil(total / 6)), good = Array.from({length: steps + 1}, (_, k) => at(n.side, k / steps * total)).reverse(), bad = Array.from({length: 7}, (_, k) => at(-n.side, k / 12 * 2 * D)).reverse();
@@ -1352,6 +1352,8 @@ function agDraw() {
   if (rh.tick - rh.tap < 6 && rh.mode === 'play') { const f = rh.tapSide || 1, ax = AG.X + sh + f * 40; for (let k = 0; k < 6; k++) px(g, '#fff4c8', ax + f * k, AG.Y - 5 + k, 1, 11 - 2 * k); }  // le côté choisi
   agSeasonFx(rh.season || 'été');
   if (rh.judge && rh.mode === 'play') pxFont(g, rh.judge.text, AG.X, AG.Y - 34, rh.judge.col, 7, 'center');
+  const tun = rh.mode === 'play' && (rh.tuns || []).find(([a, b]) => now > a - 2.5 && now < b);  // ce qu'il faut faire dans un tunnel, dit avant d'y entrer et tout du long
+  if (tun) gameText(g, W, now < tun[0] ? [['TUNNEL DEVANT !', '#ffd84a', 8], ['La voie y est cachée : garde le rythme de la musique', '#fff4c8', 6]] : [['DANS LE TUNNEL', '#ffd84a', 8], ['Appuie du côté de la flèche quand elle s’allume', '#fff4c8', 6]], 52);
   if (rh.mode !== 'ready' && rh.mode !== 'load') {
     rhProgress(now, '#ffd84a'); pxFont(g, String(rh.score).padStart(7, '0'), 4, 14, '#ffffff', 7);
     if (rh.combo > 4) pxFont(g, rh.combo + ' combo', W - 4, 14, '#ffd84a', 7, 'right');
